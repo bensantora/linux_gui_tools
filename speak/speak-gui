@@ -1,0 +1,67 @@
+#!/bin/bash
+# speak-gui - a small window for the `speak` command
+#
+# Type or paste text, pick a voice, then:
+#   Play       hear it right away
+#   Voice...   choose a different voice
+#   Save MP3   choose where to save it
+#   Close      quit
+# The window comes back after each action with your text still in it.
+
+here="$(dirname "$(readlink -f "$0")")"
+PATH="$here:$PATH"      # use the `speak` that sits next to this file
+text=""
+voice="cori"
+player=""
+tmp=$(mktemp -d)
+trap '[ -n "$player" ] && kill "$player" 2>/dev/null; rm -rf "$tmp"' EXIT
+
+make_audio() {    # $1 = output file; shows a "working" bar while speak runs
+    printf '%s' "$text" | speak -v "$voice" - "$1" >/dev/null 2>"$tmp/err" &
+    local job=$!
+    ( while kill -0 $job 2>/dev/null; do echo "#Creating speech..."; sleep 0.3; done ) |
+        yad --progress --pulsate --auto-close --no-buttons --center --width=300 \
+            --title="Speak" --text="Working..." 2>/dev/null
+    wait $job || { yad --error --center --title="Speak" --text="Something went wrong:\n$(cat "$tmp/err")"; return 1; }
+}
+
+pick_voice() {
+    local v
+    v=$(yad --list --center --title="Speak - choose a voice" --width=360 --height=260 \
+        --column="Voice" --column="Description" --print-column=1 --separator="" \
+        cori "British female (default)" lessac "US female" hfc "US female, another style" amy "US female, warm and clear" \
+        --button="OK:0" --button="Cancel:1") && [ -n "$v" ] && voice=${v%%|*}
+}
+
+while true; do
+    # The text box is edited in place; whatever is in it when a button is pressed is printed back exactly as typed.
+    printf '%s' "$text" > "$tmp/text.txt"
+    result=$(yad --text-info --editable --wrap --center --title="Speak - text to speech (voice: $voice)" \
+        --width=720 --height=480 --filename="$tmp/text.txt" \
+        --button="Play:2" --button="Save MP3...:0" --button="Voice...:4" --button="Close:1")
+    action=$?
+    case $action in 0|2|4) ;; *) break ;; esac
+    text=$result
+
+    if [ $action -eq 4 ]; then pick_voice; continue; fi
+
+    if [ -z "${text//[[:space:]]/}" ]; then
+        yad --info --center --title="Speak" --text="Type or paste some text first." --button=OK:0
+        continue
+    fi
+
+    [ -n "$player" ] && kill "$player" 2>/dev/null
+
+    if [ $action -eq 2 ]; then
+        make_audio "$tmp/preview.mp3" && { mpv --really-quiet --no-video "$tmp/preview.mp3" & player=$!; }
+    else
+        dest=$(yad --entry --center --width=560 --title="Save speech as" \
+            --text="Where to save it? (type a name; a plain name goes in your home folder)" \
+            --entry-text="$HOME/speech.mp3" --button="Save:0" --button="Cancel:1") || continue
+        dest=${dest//|/}
+        [ -n "${dest// /}" ] || continue
+        case $dest in /*) ;; "~/"*) dest="$HOME/${dest#\~/}" ;; *) dest="$HOME/$dest" ;; esac
+        case $dest in *.mp3|*.wav) ;; *) dest="$dest.mp3" ;; esac
+        make_audio "$dest" && yad --info --center --title="Speak" --text="Saved:\n$dest" --button=OK:0 --timeout=6
+    fi
+done

@@ -1,0 +1,97 @@
+#!/bin/bash
+# ebook-gui - simple window for writing an ebook. Chapters are plain text files in <ebook_creator>/books/<book>/chapters/
+E="$(dirname "$(readlink -f "$0")")/ebook"
+DIR="$(dirname "$(readlink -f "$0")")/../books"   # next to this app folder, wherever ebook_creator lives
+EDITOR_CMD="${EDITOR_CMD:-geany}"
+
+edit() {  # open one chapter file; wait until the editor closes (geany) so the list refreshes after
+  if [ "$EDITOR_CMD" = geany ]; then geany -i "$1"; else "$EDITOR_CMD" "$1"; fi
+}
+
+new_book() {
+  local r t a
+  r=$(yad --form --title="New book" --center --width=420 \
+        --field="Book title" "My New Book" --field="Author" "$USER" \
+        --button="Cancel:1" --button="_Create:0") || return 1
+  IFS='|' read -r t a _ <<<"$r"
+  BOOK=$("$E" newbook "$t" "$a") || return 1
+}
+
+choose_book() {
+  local rows out rc args r
+  while true; do
+    mapfile -t rows < <("$E" books)
+    if ((${#rows[@]} == 0)); then new_book || exit 0; return; fi
+    if ((${#rows[@]} == 1)) && [ "$1" != force ]; then BOOK=${rows[0]%%$'\t'*}; return; fi
+    args=(); for r in "${rows[@]}"; do args+=("${r%%$'\t'*}" "${r#*$'\t'}"); done
+    out=$(yad --list --title="Your books" --center --width=500 --height=350 \
+          --text="Pick a book, then press Enter." \
+          --column=Folder --column=Book --hide-column=1 --print-column=1 --separator='' "${args[@]}" \
+          --button="_Quit:1" --button="_New book:10" --button="_Open:0")
+    rc=$?
+    case $rc in
+      0) [ -n "$out" ] && { BOOK=$out; return; } ;;
+      10) new_book && return ;;
+      *) exit 0 ;;
+    esac
+  done
+}
+
+HELP='<b>How to write</b>
+
+First line of a chapter file  =  the chapter title
+Blank line                    =  new paragraph
+## Words                      =  section heading
+*italic*     **bold**
+* * *                         =  a break between scenes
+
+<b>Buttons</b>  (hold Alt and press the underlined letter)
+Edit  opens the chapter in Geany.  Save with Ctrl+S, close Geany, and you are back here.
+New chapter, Rename, Up and Down (change the order), Delete (goes to a trash folder, not gone).
+Build makes the .epub and opens it so you can look at it.
+The table of contents is built for you from the chapter titles.'
+
+choose_book
+while true; do
+  mapfile -t rows < <("$E" list "$BOOK")
+  args=(); total=0
+  for r in "${rows[@]}"; do
+    IFS=$'\t' read -r f n t w <<<"$r"
+    args+=("$f" "$n" "$t" "$w"); total=$((total + w))
+  done
+  name=$("$E" info "$BOOK" | sed -n 's/^title=//p')
+  sel=$(yad --list --title="$name  -  $total words" --center --width=760 --height=520 \
+        --text="Pick a chapter and press <b>Enter</b> to write in it." \
+        --column=file --column="#:NUM" --column="Chapter" --column="Words:NUM" \
+        --hide-column=1 --print-column=1 --separator='' "${args[@]}" \
+        --button="_Quit:1" --button="_Help:18" --button="Switch _book:19" \
+        --button="Book _info:15" --button="_Delete:14" --button="_Down:13" --button="_Up:12" \
+        --button="_Rename:11" --button="_New chapter:10" --button="_Build book:16" --button="_Edit:0")
+  rc=$?
+  need_sel() { [ -n "$sel" ] || { yad --info --center --text="Click a chapter in the list first." --button=OK:0; return 1; }; }
+  case $rc in
+    0)  need_sel && edit "$DIR/$BOOK/chapters/$sel" ;;
+    10) t=$(yad --entry --center --title="New chapter" --text="Title of the new chapter:" --entry-text="Chapter $(( ${#rows[@]} + 1 ))") \
+          && [ -n "$t" ] && f=$("$E" new "$BOOK" "$t") && edit "$DIR/$BOOK/chapters/$f" ;;
+    11) need_sel && cur=$("$E" title "$BOOK" "$sel") \
+          && t=$(yad --entry --center --title="Rename" --text="New title:" --entry-text="$cur") \
+          && [ -n "$t" ] && "$E" rename "$BOOK" "$sel" "$t" ;;
+    12) need_sel && "$E" move "$BOOK" "$sel" up ;;
+    13) need_sel && "$E" move "$BOOK" "$sel" down ;;
+    14) need_sel && yad --question --center --text="Delete this chapter?\n(It is moved to the .trash folder, not erased.)" \
+          --button="No:1" --button="Yes, delete:0" && "$E" delete "$BOOK" "$sel" ;;
+    15) mapfile -t inf < <("$E" info "$BOOK")
+        v=(); for l in "${inf[@]}"; do v+=("${l#*=}"); done
+        r=$(yad --form --center --title="Book info" --width=480 \
+              --field="Title" "${v[0]}" --field="Subtitle" "${v[1]}" --field="Author" "${v[2]}" \
+              --field="Publisher" "${v[3]}" --field="Year" "${v[4]}" --field="Rights line" "${v[5]}" \
+              --button="Cancel:1" --button="_Save:0") \
+          && { IFS='|' read -r a b c d e g _ <<<"$r"
+               "$E" setinfo "$BOOK" "title=$a" "subtitle=$b" "author=$c" "publisher=$d" "year=$e" "rights=$g"; } ;;
+    16) if out=$("$E" build "$BOOK" 2>&1); then setsid "${EBOOK_VIEWER:-ebook-viewer}" "$out" >/dev/null 2>&1 &
+        else yad --error --center --text="Could not build the book:\n$out" --button=OK:0; fi ;;
+    18) yad --info --center --title="Help" --width=520 --text="$HELP" --button=OK:0 ;;
+    19) choose_book force ;;
+    *)  exit 0 ;;
+  esac
+done

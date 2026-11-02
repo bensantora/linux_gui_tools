@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""ebook - tiny EPUB maker. Books live in <ebook_creator>/books/<book>/ ; chapters are plain .txt files.
+Commands: books | newbook TITLE AUTHOR | list B | title B F | new B TITLE | rename B F TITLE
+          move B F up|down | delete B F | info B | setinfo B k=v... | build B
+Text format: first line = chapter title; blank line = new paragraph; '## ' = section heading;
+*italic* **bold**; a line of '* * *' = scene break."""
+import os, sys, re, html, zipfile, uuid, shutil, textwrap, datetime, io, hashlib
+import xml.dom.minidom as minidom
+
+ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "books"))   # <ebook_creator>/books, wherever this folder lives
+KEYS = ["title", "subtitle", "author", "publisher", "year", "rights", "uuid"]
+
+def die(msg):
+    print(msg, file=sys.stderr); sys.exit(1)
+
+def slugify(s):
+    return re.sub(r"[^a-z0-9]+", "-", s.lower().replace("'", "")).strip("-")[:40] or "untitled"
+
+def bdir(b):
+    d = os.path.join(ROOT, b)
+    if not os.path.isfile(os.path.join(d, "book.conf")):
+        die("No such book: " + b)
+    return d
+
+def cdir(b):
+    return os.path.join(bdir(b), "chapters")
+
+# ---------- config ----------
+def read_conf(b):
+    c = {}
+    for line in open(os.path.join(bdir(b), "book.conf"), encoding="utf-8"):
+        if "=" in line and not line.startswith("#"):
+            k, v = line.rstrip("\n").split("=", 1)
+            c[k.strip()] = v.strip()
+    return c
+
+def write_conf(b, c):
+    with open(os.path.join(ROOT, b, "book.conf"), "w", encoding="utf-8") as f:
+        f.write("# Book settings. Edit here or use 'Book info' in the app.\n")
+        for k in KEYS:
+            f.write("%s=%s\n" % (k, c.get(k, "")))
+
+# ---------- chapters ----------
+def ordered(b):
+    cd = cdir(b)
+    present = sorted(f for f in os.listdir(cd) if f.endswith(".txt"))
+    order = []
+    op = os.path.join(bdir(b), "order.txt")
+    if os.path.isfile(op):
+        for line in open(op, encoding="utf-8"):
+            f = line.strip()
+            if f in present and f not in order:
+                order.append(f)
+    return order + [f for f in present if f not in order]
+
+def save_order(b, order):
+    with open(os.path.join(bdir(b), "order.txt"), "w", encoding="utf-8") as f:
+        f.write("\n".join(order) + "\n")
+
+def read_ch(b, f):
+    return open(os.path.join(cdir(b), f), encoding="utf-8").read().replace("\r\n", "\n")
+
+def split_title(text):
+    lines = text.split("\n")
+    i = 0
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    if i >= len(lines):
+        return "Untitled", ""
+    return re.sub(r"^#+\s*", "", lines[i]).strip().replace("|", "-"), "\n".join(lines[i + 1:])
+
+def cmd_list(b):
+    for n, f in enumerate(ordered(b), 1):
+        t, rest = split_title(read_ch(b, f))
+        print("%s\t%d\t%s\t%d" % (f, n, t, len(rest.split())))
+
+def cmd_title(b, f):
+    print(split_title(read_ch(b, f))[0])
+
+def new_file(b, title, body=None):
+    base = slugify(title); name = base + ".txt"; n = 2
+    while os.path.exists(os.path.join(cdir(b), name)):
+        name = "%s-%d.txt" % (base, n); n += 1
+    if body is None:
+        body = "Write your text here. Leave a blank line between paragraphs.\n"
+    with open(os.path.join(cdir(b), name), "w", encoding="utf-8") as fh:
+        fh.write(title + "\n\n" + body)
+    return name
+
+def cmd_new(b, title):
+    title = title.replace("|", "-").strip() or "Untitled"
+    order = ordered(b)
+    name = new_file(b, title)
+    save_order(b, order + [name])
+    print(name)
+
+def cmd_rename(b, f, title):
+    title = title.replace("|", "-").strip()
+    if not title: die("Empty title")
+    text = read_ch(b, f).split("\n")
+    i = 0
+    while i < len(text) and not text[i].strip():
+        i += 1
+    if i < len(text): text[i] = title
+    else: text = [title, ""]
+    open(os.path.join(cdir(b), f), "w", encoding="utf-8").write("\n".join(text))
+
+def cmd_move(b, f, way):
+    o = ordered(b); i = o.index(f)
+    j = i - 1 if way == "up" else i + 1
+    if 0 <= j < len(o):
+        o[i], o[j] = o[j], o[i]
+    save_order(b, o)
+
+def cmd_delete(b, f):
+    trash = os.path.join(bdir(b), ".trash"); os.makedirs(trash, exist_ok=True)
+    shutil.move(os.path.join(cdir(b), f), os.path.join(trash, f))
+    save_order(b, [x for x in ordered(b) if x != f])
+
+def cmd_books():
+    if not os.path.isdir(ROOT): return
+    for d in sorted(os.listdir(ROOT)):
+        if os.path.isfile(os.path.join(ROOT, d, "book.conf")):
+            print("%s\t%s" % (d, read_conf(d).get("title", d)))
+
+def cmd_newbook(title, author):
+    title = title.strip() or "Untitled Book"
+    base = slugify(title); b = base; n = 2
+    while os.path.exists(os.path.join(ROOT, b)):
+        b = "%s-%d" % (base, n); n += 1
+    os.makedirs(os.path.join(ROOT, b, "chapters"))
+    write_conf(b, {"title": title, "subtitle": "", "author": author.strip() or "Anonymous",
+                   "publisher": "", "year": str(datetime.date.today().year),
+                   "rights": "All rights reserved.", "uuid": "urn:uuid:" + str(uuid.uuid4())})
+    names = [new_file(b, t) for t in ["Preface", "Introduction", "Chapter One", "Chapter Two",
+                                      "Chapter Three", "About the Author"]]
+    save_order(b, names)
+    print(b)
+
+def cmd_info(b):
+    c = read_conf(b)
+    for k in KEYS[:-1]:
+        print("%s=%s" % (k, c.get(k, "")))
+
+def cmd_setinfo(b, pairs):
+    c = read_conf(b)
+    for p in pairs:
+        k, v = p.split("=", 1)
+        if k in KEYS and k != "uuid": c[k] = v.replace("\n", " ").strip()
+    write_conf(b, c)
+
+# ---------- text -> xhtml ----------
+def inline(s):
+    s = html.escape(s, quote=False)
+    s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"\*(.+?)\*", r"<em>\1</em>", s)
+    return s
+
+OPEN = set(" \t\n([{—–-“‘")
+
+def smart(h):
+    out, prev = [], " "
+    for tok in re.split(r"(<[^>]+>)", h):
+        if tok.startswith("<") and tok.endswith(">"):
+            out.append(tok); continue
+        tok = tok.replace("--", "—").replace("...", "…")
+        for ch in tok:
+            if ch == '"': ch = "“" if prev in OPEN else "”"
+            elif ch == "'": ch = "‘" if prev in OPEN else "’"
+            out.append(ch); prev = ch
+    return "".join(out)
+
+def body_html(rest):
+    out = []
+    for blk in re.split(r"\n\s*\n", rest.strip()):
+        blk = blk.strip()
+        if not blk: continue
+        if re.fullmatch(r"(\*\s*){3,}|-{3,}|_{3,}", blk):
+            out.append('<p class="center">* * *</p>'); continue
+        lines = blk.split("\n")
+        m = re.match(r"^(#{2,4})\s+(.*)$", lines[0])
+        if m:
+            lv = len(m.group(1))
+            out.append("<h%d>%s</h%d>" % (lv, smart(inline(m.group(2).strip())), lv))
+            lines = lines[1:]
+        if lines:
+            out.append("<p>%s</p>" % smart(inline(" ".join(l.strip() for l in lines))))
+    return "\n".join(out)
+
+CSS = """body { font-family: serif; line-height: 1.5; margin: 5%; }
+h1 { text-align: center; margin: 2em 0 1em; page-break-before: always; }
+h2 { margin-top: 1.5em; }
+h3 { margin-top: 1.2em; font-style: italic; }
+p { margin: 0; text-indent: 1.4em; text-align: justify; }
+h1 + p, h2 + p, h3 + p, p.first { text-indent: 0; }
+.center { text-align: center; text-indent: 0; }
+.title { font-size: 2.4em; margin-top: 30%; }
+.subtitle { font-style: italic; font-size: 1.2em; }
+.author { margin-top: 3em; font-size: 1.3em; }
+.small { font-size: 0.85em; }
+nav ol { list-style: none; padding-left: 0; }
+nav li { margin: 0.5em 0; }
+img.cover { max-width: 100%; height: auto; }
+"""
+
+def xpage(title, body, etype, css="../styles/style.css"):
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n'
+            '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en" xml:lang="en">\n'
+            '<head>\n  <meta charset="utf-8"/>\n  <title>%s</title>\n'
+            '  <link rel="stylesheet" type="text/css" href="%s"/>\n</head>\n'
+            '<body epub:type="%s">\n%s\n</body>\n</html>\n') % (html.escape(title), css, etype, body)
+
+def etype_for(title):
+    t = title.lower()
+    for k in ("preface", "foreword", "introduction"):
+        if t.startswith(k): return k
+    for k in ("about the author", "acknowledg", "afterword", "appendix"):
+        if t.startswith(k): return "backmatter"
+    return "bodymatter chapter"
+
+def make_cover(c):
+    from PIL import Image, ImageDraw, ImageFont
+    W, H = 1600, 2400
+    h = hashlib.md5(c["title"].encode()).digest()
+    bg = (20 + h[0] % 60, 25 + h[1] % 60, 40 + h[2] % 70)
+    im = Image.new("RGB", (W, H), bg); d = ImageDraw.Draw(im)
+    def font(sz, bold=False):
+        for p in ("/usr/share/fonts/truetype/dejavu/DejaVuSerif%s.ttf" % ("-Bold" if bold else ""),):
+            if os.path.exists(p): return ImageFont.truetype(p, sz)
+        return ImageFont.load_default()
+    def center(t, y, f, fill=(245, 235, 210)):
+        w = d.textlength(t, font=f); d.text(((W - w) / 2, y), t, font=f, fill=fill)
+    y = 400
+    for line in textwrap.wrap(c["title"].upper(), 16)[:5]:
+        center(line, y, font(120, True)); y += 160
+    if c.get("subtitle"):
+        y += 60
+        for line in textwrap.wrap(c["subtitle"], 34)[:3]:
+            center(line, y, font(62)); y += 85
+    d.line((500, 2000, 1100, 2000), fill=(245, 235, 210), width=4)
+    center(c["author"], 2100, font(70))
+    buf = io.BytesIO(); im.save(buf, "PNG"); return buf.getvalue()
+
+def cmd_build(b):
+    c = read_conf(b); d = bdir(b)
+    chs = []
+    for n, f in enumerate(ordered(b), 1):
+        t, rest = split_title(read_ch(b, f))
+        chs.append(("text/ch%02d.xhtml" % n, "ch%02d" % n, t, body_html(rest), etype_for(t)))
+    if not chs: die("This book has no chapters yet.")
+    T, A = html.escape(c["title"]), html.escape(c["author"])
+    files = {}
+    files["META-INF/container.xml"] = ('<?xml version="1.0" encoding="UTF-8"?>\n<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">\n'
+        '  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>\n</container>\n')
+    files["OEBPS/styles/style.css"] = CSS
+    cp = os.path.join(d, "cover.png")
+    files["OEBPS/images/cover.png"] = open(cp, "rb").read() if os.path.isfile(cp) else make_cover(c)
+    files["OEBPS/text/cover.xhtml"] = xpage("Cover", '<div class="center"><img class="cover" src="../images/cover.png" alt="Cover"/></div>', "cover")
+    sub = '<p class="center subtitle">%s</p>\n' % html.escape(c["subtitle"]) if c.get("subtitle") else ""
+    files["OEBPS/text/titlepage.xhtml"] = xpage("Title Page",
+        '<p class="center title">%s</p>\n%s<p class="center author">%s</p>\n<p class="center small">%s</p>' % (T, sub, A, html.escape(c.get("year", ""))), "titlepage")
+    pub = "<p class=\"first\">Published by %s.</p>" % html.escape(c["publisher"]) if c.get("publisher") else ""
+    files["OEBPS/text/copyright.xhtml"] = xpage("Copyright",
+        '<h1>Copyright</h1>\n<p class="first">Copyright &#169; %s %s. %s</p>\n%s' % (html.escape(c.get("year", "")), A, html.escape(c.get("rights", "")), pub), "copyright-page")
+    for href, _, t, body, et in chs:
+        files["OEBPS/" + href] = xpage(t, "<h1>%s</h1>\n%s" % (smart(html.escape(t)), body), et)
+    lis = "\n".join('      <li><a href="%s">%s</a></li>' % (h, html.escape(t)) for h, _, t, _, _ in chs)
+    start = next((h for h, _, _, _, e in chs if e.startswith("bodymatter")), chs[0][0])
+    files["OEBPS/nav.xhtml"] = ('<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en" xml:lang="en">\n'
+        '<head><meta charset="utf-8"/><title>Table of Contents</title><link rel="stylesheet" type="text/css" href="styles/style.css"/></head>\n<body>\n'
+        '  <nav epub:type="toc" id="toc">\n    <h1>Table of Contents</h1>\n    <ol>\n%s\n    </ol>\n  </nav>\n'
+        '  <nav epub:type="landmarks" hidden="hidden"><ol>\n'
+        '    <li><a epub:type="cover" href="text/cover.xhtml">Cover</a></li>\n'
+        '    <li><a epub:type="toc" href="nav.xhtml">Table of Contents</a></li>\n'
+        '    <li><a epub:type="bodymatter" href="%s">Start of Book</a></li>\n  </ol></nav>\n</body>\n</html>\n') % (lis, start)
+    pts = "\n".join('    <navPoint id="n%d" playOrder="%d"><navLabel><text>%s</text></navLabel><content src="%s"/></navPoint>'
+                    % (i, i, html.escape(t), h) for i, (h, _, t, _, _) in enumerate(chs, 1))
+    files["OEBPS/toc.ncx"] = ('<?xml version="1.0" encoding="UTF-8"?>\n<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">\n'
+        '  <head><meta name="dtb:uid" content="%s"/><meta name="dtb:depth" content="1"/></head>\n'
+        '  <docTitle><text>%s</text></docTitle>\n  <navMap>\n%s\n  </navMap>\n</ncx>\n') % (html.escape(c["uuid"]), T, pts)
+    man = "\n".join('    <item id="%s" href="%s" media-type="application/xhtml+xml"/>' % (i, h) for h, i, _, _, _ in chs)
+    spine = "\n".join('    <itemref idref="%s"/>' % i for _, i, _, _, _ in chs)
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    desc = html.escape(c.get("subtitle") or c["title"])
+    pubm = "    <dc:publisher>%s</dc:publisher>\n" % html.escape(c["publisher"]) if c.get("publisher") else ""
+    files["OEBPS/content.opf"] = ('<?xml version="1.0" encoding="UTF-8"?>\n<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" xml:lang="en">\n'
+        '  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">\n    <dc:identifier id="bookid">%s</dc:identifier>\n    <dc:title>%s</dc:title>\n'
+        '    <dc:creator>%s</dc:creator>\n    <dc:language>en</dc:language>\n%s    <dc:date>%s</dc:date>\n    <dc:description>%s</dc:description>\n'
+        '    <meta property="dcterms:modified">%s</meta>\n    <meta name="cover" content="cover-image"/>\n  </metadata>\n  <manifest>\n'
+        '    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>\n'
+        '    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>\n'
+        '    <item id="css" href="styles/style.css" media-type="text/css"/>\n'
+        '    <item id="cover-image" href="images/cover.png" media-type="image/png" properties="cover-image"/>\n'
+        '    <item id="cover" href="text/cover.xhtml" media-type="application/xhtml+xml"/>\n'
+        '    <item id="titlepage" href="text/titlepage.xhtml" media-type="application/xhtml+xml"/>\n'
+        '    <item id="copyright" href="text/copyright.xhtml" media-type="application/xhtml+xml"/>\n%s\n  </manifest>\n'
+        '  <spine toc="ncx">\n    <itemref idref="cover"/>\n    <itemref idref="titlepage"/>\n    <itemref idref="copyright"/>\n    <itemref idref="nav"/>\n%s\n  </spine>\n'
+        '  <guide><reference type="cover" title="Cover" href="text/cover.xhtml"/></guide>\n</package>\n') % (
+        html.escape(c["uuid"]), T, A, pubm, html.escape(c.get("year", "") or now[:4]), desc, now, man, spine)
+    for name, data in files.items():
+        if name.endswith((".xhtml", ".opf", ".ncx", ".xml")):
+            try: minidom.parseString(data.encode("utf-8"))
+            except Exception as e: die("Problem in %s: %s" % (name, e))
+    out = os.path.join(ROOT, b + ".epub")
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        zi = zipfile.ZipInfo("mimetype"); zi.compress_type = zipfile.ZIP_STORED
+        z.writestr(zi, "application/epub+zip")
+        for name, data in files.items():
+            z.writestr(name, data)
+    print(out)
+
+def main(a):
+    if not a: print(__doc__); return
+    c, r = a[0], a[1:]
+    try:
+        {"books": lambda: cmd_books(), "newbook": lambda: cmd_newbook(*r), "list": lambda: cmd_list(*r),
+         "title": lambda: cmd_title(*r), "new": lambda: cmd_new(*r), "rename": lambda: cmd_rename(*r),
+         "move": lambda: cmd_move(*r), "delete": lambda: cmd_delete(*r), "info": lambda: cmd_info(*r),
+         "setinfo": lambda: cmd_setinfo(r[0], r[1:]), "build": lambda: cmd_build(*r)}[c]()
+    except KeyError: die("Unknown command: " + c)
+
+main(sys.argv[1:])

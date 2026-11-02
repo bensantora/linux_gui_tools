@@ -1,0 +1,72 @@
+#!/bin/bash
+# speak - turn text into a polished MP3 with Piper (standalone, no Python)
+#
+#   speak notes.txt                 -> notes.mp3 next to the text file
+#   speak notes.txt out.mp3         -> choose the output file
+#   echo "hello" | speak - hi.mp3   -> text from a pipe
+#   speak -p notes.txt              -> also play it when done
+#   speak -v lessac notes.txt       -> other voice: cori (default), lessac, hfc, amy
+#
+# Piper lives in ~/.local/share/piper, voices in ~/.local/share/piper/voices.
+set -euo pipefail
+
+PIPER_DIR="${PIPER_DIR:-$HOME/.local/share/piper}"
+voice="cori"
+play=0
+
+while getopts "v:ph" opt; do
+    case $opt in
+        v) voice=$OPTARG ;;
+        p) play=1 ;;
+        *) sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    esac
+done
+shift $((OPTIND - 1))
+[ $# -ge 1 ] || { sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 1; }
+
+case $voice in
+    cori)   model=en_GB-cori-high ;;           # British female (voice #5)
+    lessac) model=en_US-lessac-high ;;         # US female
+    hfc)    model=en_US-hfc_female-medium ;;   # US female, another style
+    amy)    model=en_US-amy-medium ;;          # US female, warm and clear
+    *)      model=$voice ;;                    # any other model name in ~/.local/share/piper/voices
+esac
+
+input=$1
+if [ "$input" = "-" ]; then
+    out=${2:-speech.mp3}
+    text=$(cat)
+else
+    out=${2:-${input%.*}.mp3}
+    text=$(cat "$input")
+fi
+
+# Small fixes so casual writing reads naturally:
+#   whole text on one line, lowercase "i" -> "I" (otherwise it's stressed),
+#   " - " -> a spoken pause, capital letter at the start of each sentence
+text=$(printf '%s' "$text" | tr '\n\t' '  ' | sed -E \
+    -e 's/ +/ /g; s/^ //; s/ $//' \
+    -e 's/\bi\b/I/g' \
+    -e 's/ +(-|–|—)+ +/, /g' \
+    -e 's/(^|[.!?] +)([a-z])/\1\u\2/g')
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+printf '%s\n' "$text" | "$PIPER_DIR/piper" -m "$PIPER_DIR/voices/$model.onnx" \
+    --length_scale 1.07 --noise_scale 0.72 --noise_w 0.95 --sentence_silence 0.35 \
+    -f "$tmp/raw.wav" >/dev/null 2>&1
+
+# Studio polish: warmer EQ, gentle compression, a touch of room, -16 LUFS loudness
+polish="highpass=f=70,equalizer=f=180:t=q:w=1:g=2.5,equalizer=f=3200:t=q:w=1.5:g=1.5,\
+equalizer=f=7500:t=q:w=2:g=-2,acompressor=threshold=-20dB:ratio=3:attack=8:release=150:makeup=2,\
+aecho=0.85:0.6:28|47:0.10|0.06,loudnorm=I=-16:TP=-1.5:LRA=9"
+
+case $out in
+    *.wav) ffmpeg -y -loglevel error -i "$tmp/raw.wav" -af "$polish" -ar 48000 "$out" ;;
+    *)     ffmpeg -y -loglevel error -i "$tmp/raw.wav" -af "$polish" -ar 48000 -c:a libmp3lame -b:a 192k "$out" ;;
+esac
+echo "$out"
+
+[ $play -eq 1 ] && mpv --really-quiet --no-video "$out"
+exit 0
