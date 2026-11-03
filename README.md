@@ -22,6 +22,7 @@ framework: download it, make the scripts executable and run them.
 | [`speak/`](speak/) | Paste text, hear it or save it as a polished MP3 (offline voices via Piper) |
 | [`rec/`](rec/) | Record the whole screen plus the sound you hear, one button |
 | [`ebook/`](ebook/) | Write an ebook as plain-text chapters and build a valid `.epub` with one click |
+| [`picture-sound-mp4/`](picture-sound-mp4/) | One picture + one sound file = an MP4 as long as the sound |
 
 ## Requirements (all tools)
 
