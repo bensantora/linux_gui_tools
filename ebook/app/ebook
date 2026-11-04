@@ -201,6 +201,8 @@ h1 + p, h2 + p, h3 + p, p.first { text-indent: 0; }
 nav ol { list-style: none; padding-left: 0; }
 nav li { margin: 0.5em 0; }
 img.cover { max-width: 100%; height: auto; }
+img.diagram { max-width: 100%; height: auto; margin: 0 0 1.2em; }
+.center + p { text-indent: 0; }
 """
 
 def xpage(title, body, etype, css="../styles/style.css"):
@@ -243,10 +245,18 @@ def make_cover(c):
 
 def cmd_build(b):
     c = read_conf(b); d = bdir(b)
-    chs = []
+    chs = []; imgs = []   # imgs: (manifest id, file name, bytes)
     for n, f in enumerate(ordered(b), 1):
         t, rest = split_title(read_ch(b, f))
-        chs.append(("text/ch%02d.xhtml" % n, "ch%02d" % n, t, body_html(rest), etype_for(t)))
+        body = body_html(rest)
+        stem = os.path.splitext(f)[0]
+        ip = os.path.join(d, "images", stem + ".png")
+        if os.path.isfile(ip):   # optional chapter-opening image: images/<chapter>.png (+ <chapter>.alt.txt)
+            ap = os.path.join(d, "images", stem + ".alt.txt")
+            alt = open(ap, encoding="utf-8").read().strip() if os.path.isfile(ap) else "Illustration for " + t
+            imgs.append(("img%02d" % n, "ch%02d.png" % n, open(ip, "rb").read()))
+            body = '<div class="center"><img class="diagram" src="../images/ch%02d.png" alt="%s"/></div>\n%s' % (n, html.escape(alt, quote=True), body)
+        chs.append(("text/ch%02d.xhtml" % n, "ch%02d" % n, t, body, etype_for(t)))
     if not chs: die("This book has no chapters yet.")
     T, A = html.escape(c["title"]), html.escape(c["author"])
     files = {}
@@ -262,6 +272,7 @@ def cmd_build(b):
     pub = "<p class=\"first\">Published by %s.</p>" % html.escape(c["publisher"]) if c.get("publisher") else ""
     files["OEBPS/text/copyright.xhtml"] = xpage("Copyright",
         '<h1>Copyright</h1>\n<p class="first">Copyright &#169; %s %s. %s</p>\n%s' % (html.escape(c.get("year", "")), A, html.escape(c.get("rights", "")), pub), "copyright-page")
+    for iid, iname, data in imgs: files["OEBPS/images/" + iname] = data
     for href, _, t, body, et in chs:
         files["OEBPS/" + href] = xpage(t, "<h1>%s</h1>\n%s" % (smart(html.escape(t)), body), et)
     lis = "\n".join('      <li><a href="%s">%s</a></li>' % (h, html.escape(t)) for h, _, t, _, _ in chs)
@@ -280,6 +291,7 @@ def cmd_build(b):
         '  <head><meta name="dtb:uid" content="%s"/><meta name="dtb:depth" content="1"/></head>\n'
         '  <docTitle><text>%s</text></docTitle>\n  <navMap>\n%s\n  </navMap>\n</ncx>\n') % (html.escape(c["uuid"]), T, pts)
     man = "\n".join('    <item id="%s" href="%s" media-type="application/xhtml+xml"/>' % (i, h) for h, i, _, _, _ in chs)
+    man += "".join('\n    <item id="%s" href="images/%s" media-type="image/png"/>' % (i, n) for i, n, _ in imgs)
     spine = "\n".join('    <itemref idref="%s"/>' % i for _, i, _, _, _ in chs)
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     desc = html.escape(c.get("subtitle") or c["title"])
