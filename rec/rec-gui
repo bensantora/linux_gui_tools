@@ -12,6 +12,9 @@
 # Audio is always the current default output (@DEFAULT_MONITOR@), so it
 # follows your headphones. Video is H.264, audio is lossless FLAC.
 
+# Larger text in the yad windows only (not in ffmpeg etc.)
+yad() { GDK_DPI_SCALE=1.3 command yad "$@"; }
+
 pidfile="${XDG_RUNTIME_DIR:-/tmp}/rec-gui.pid"
 
 # Already recording? Then this run is the "stop" request.

@@ -1,0 +1,61 @@
+How Geologic Time Is Divided
+
+Geologists slice Earth's 4.6-billion-year history into nested units, much like a calendar divides time into years, months and days. The largest unit is the **eon**. There are four: the Hadean, Archean, Proterozoic and Phanerozoic. The first three are often grouped informally as the Precambrian, covering roughly 88 percent of Earth's history.
+
+Each eon is split into **eras**. The Phanerozoic, the eon of visible, complex life, has three: the Paleozoic ("ancient life"), the Mesozoic ("middle life") and the Cenozoic ("new life").
+
+Each era is split into **periods**. These are the famous names: Cambrian, Devonian, Jurassic and so on. Periods are the main subject of this book. Twelve of them make up the Phanerozoic, and each is defined by distinctive rock layers and fossils.
+
+Below periods come **epochs** and **ages**, finer divisions used mostly for recent time.
+
+Boundaries between units are usually marked by dramatic changes in the fossil record, often mass extinctions. Dates are given in millions of years ago, abbreviated mya, and are refined as dating methods improve. The figures in this book are rounded.
+
+* * *
+
+Paleozoic: Cambrian, Ordovician, Silurian, Devonian, Carboniferous, Permian.
+
+Mesozoic: Triassic, Jurassic, Cretaceous.
+
+Cenozoic: Paleogene, Neogene, Quaternary.
+
+## Why We Divide Time at All
+
+Four and a half billion years is a span the human mind cannot hold. A single human life is about eighty years; recorded history is a few thousand. Against the age of the Earth, all of written history is a rounding error. To talk sensibly about such a stretch, geologists needed a vocabulary, and they built it the way historians do, by marking out chapters.
+
+The system grew up in the late eighteenth and nineteenth centuries, long before anyone could put a reliable number on the age of a rock. Early geologists noticed that rock layers, or strata, were stacked like pages in a book, the oldest at the bottom and the youngest on top. They also noticed that each layer held its own characteristic fossils, and that the same fossils turned up in the same order wherever they looked. A layer with trilobites was always below a layer with ammonites, never above. This principle, called faunal succession, let them match rocks across continents without knowing their ages.
+
+The names we use today come from this early work and often reflect where the rocks were first studied. Cambrian is from Cambria, the Roman name for Wales. Devonian is from Devon in England. Jurassic is from the Jura Mountains. Permian is from the Perm region of Russia. The scheme is, in a sense, a map of where nineteenth-century geologists happened to be walking.
+
+## From Relative Time to Real Numbers
+
+For about a century, the divisions were purely relative. A geologist could say that the Silurian came after the Ordovician, but not how long ago either of them ended. That changed in the early twentieth century with the discovery of radioactivity.
+
+Certain elements decay into others at steady, measurable rates. Uranium turns into lead; potassium turns into argon. Locked into a crystal when a volcanic rock cools, these atomic clocks begin ticking. Measure how much parent and daughter material is present, and you can calculate how long ago the rock formed. This is radiometric dating, and it turned a list of names into a calendar with real dates.
+
+Since volcanic ash layers often sit between fossil-bearing sediments, geologists can bracket a fossil layer between two dated ashes. Today the dates are refined constantly. The start of the Cambrian was once given as 570 million years ago, then 543, and is now 538.8. The numbers in this book are rounded and will keep shifting by small amounts as techniques improve.
+
+## What Makes a Boundary
+
+Where does one period end and another begin? The answer is both simple and surprisingly complicated. Boundaries are chosen to mark a real change in the rocks and fossils, and many coincide with mass extinctions, when large numbers of species disappear and new ones spread into the gaps. The end of the Permian, the end of the Triassic and the end of the Cretaceous are all marked this way.
+
+The modern approach is to pick one exact spot in the world's rocks that best shows the change, and drive a metaphorical marker into it. These are nicknamed "golden spikes", though the formal term is a Global Boundary Stratotype Section and Point. The base of the Cambrian, for example, is defined at a rock section in Newfoundland, Canada, at the first appearance of a particular kind of burrow made by a wormlike animal. A real spike, in the form of a brass marker, is often placed at the site.
+
+Not every boundary has been settled. The Precambrian's older divisions are defined simply by agreed-upon dates rather than rock sections, because the rocks are too scarce and the fossils too few. Committees of specialists argue over such questions, which is why the official chart is revised every few years.
+
+## Reading the Chart
+
+The standard chart is called the International Chronostratigraphic Chart, and it is maintained by the International Commission on Stratigraphy. It is usually displayed as a colorful table with the oldest units at the bottom. Each period has an official color, so geological maps around the world look consistent.
+
+When you read about "the Jurassic", you can think of three things at once: a span of time (about 56 million years), a body of rock laid down during that time, and a world with its own climate, continents and creatures. Geologists use the same name for all three.
+
+One more note on terminology. The words "early", "middle" and "late" are used for time, while "lower", "middle" and "upper" are used for the rocks. You might read about "Late Cretaceous dinosaurs" found in "Upper Cretaceous rocks". It sounds like a quibble, but it keeps the language precise.
+
+## How to Use This Book
+
+The chapters that follow run in chronological order, oldest first. The first three cover eons of the Precambrian, which is a vast stretch with a thin record. The remaining twelve cover the periods of the Phanerozoic, where the fossil record becomes rich and the story of life becomes easy to follow.
+
+You can read straight through, or jump to a period that interests you. Each chapter explains the world as it was: where the continents lay, what the climate was like, what lived in the sea and on land, and how the period ended. A few themes recur like refrains. Continents drift and collide. Climates swing between hothouse and icehouse. Oxygen levels rise and fall. And every so often, a catastrophe resets the board, clearing space for a new cast of characters.
+
+Remember that dates are given in millions of years ago (mya) or billions of years ago (bya), counting backward from the present. A bigger number means older. The Cambrian at 539 mya is older than the Jurassic at 201 mya. It is easy to forget this when the numbers get large, so a good habit is to read the dates as "how far back would I have to go?"
+
+Finally, keep in mind that this is a story still being written. New fossils turn up every year, dating methods improve, and ideas that seemed settled are overturned. The timeline you are about to read is the best current picture, not the final one.

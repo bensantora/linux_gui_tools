@@ -1,0 +1,16 @@
+how-geologic-time-is-divided.txt
+hadean-eon-4-6-4-0-bya.txt
+archean-eon-4-0-2-5-bya.txt
+proterozoic-eon-2-5-bya-539-mya.txt
+cambrian-period-539-487-mya.txt
+ordovician-period-487-443-mya.txt
+silurian-period-443-419-mya.txt
+devonian-period-419-359-mya.txt
+carboniferous-period-359-299-mya.txt
+permian-period-299-252-mya.txt
+triassic-period-252-201-mya.txt
+jurassic-period-201-145-mya.txt
+cretaceous-period-145-66-mya.txt
+paleogene-period-66-23-mya.txt
+neogene-period-23-2-6-mya.txt
+quaternary-period-2-6-mya-today.txt

@@ -11,6 +11,8 @@ framework: download it, make the scripts executable and run them.
 - **rec** - A one-button screen recorder. It captures the whole screen plus the sound you hear, and saves each
   recording as a new numbered file without overwriting earlier ones. It can run with no window at all, so it
   works well with a keyboard shortcut.
+- **find** - Type a word or series of letters and see every file in `/home` whose name or contents contain
+  it. Double-click a result to open it.
 - **ebook** - Write a book as plain-text chapters and build a valid EPUB with one click. It makes the cover,
   title page, copyright page and table of contents for you. A sample book is included.
 
@@ -21,6 +23,7 @@ framework: download it, make the scripts executable and run them.
 |---|---|
 | [`speak/`](speak/) | Paste text, hear it or save it as a polished MP3 (offline voices via Piper) |
 | [`rec/`](rec/) | Record the whole screen plus the sound you hear, one button |
+| [`find/`](find/) | Find files in `/home` by name or content, double-click to open |
 | [`ebook/`](ebook/) | Write an ebook as plain-text chapters and build a valid `.epub` with one click |
 | [`picture-sound-mp4/`](picture-sound-mp4/) | One picture + one sound file = an MP4 as long as the sound |
 
@@ -37,7 +40,7 @@ On Debian/Ubuntu: `sudo apt install yad ffmpeg mpv python3 python3-pil geany cal
 ```
 git clone <this repo>
 cd linux-gui-tools
-chmod +x speak/speak speak/speak-gui rec/rec-gui ebook/app/ebook ebook/app/ebook-gui
+chmod +x speak/speak speak/speak-gui rec/rec-gui find/find-gui ebook/app/ebook ebook/app/ebook-gui
 ```
 
 Run any tool straight from its folder, e.g. `./speak/speak-gui`. To get a menu entry or keyboard

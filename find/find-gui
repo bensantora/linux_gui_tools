@@ -1,0 +1,47 @@
+#!/bin/bash
+# find-gui - search /home for a word or letters, in file names and file contents
+#
+# Type what to look for (e.g. darkidol), press Search; every match is listed.
+# Double-click a result to open it. Case is ignored. Search again or Close to quit.
+
+# Called by the results list on double-click: args are the row's columns (type, path)
+if [ "$1" = --open ]; then
+    shift
+    xdg-open "${2:-$1}" >/dev/null 2>&1 &
+    exit 0
+fi
+
+yad() { GDK_DPI_SCALE=1.3 command yad "$@"; }
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+term=""
+while true; do
+    term=$(yad --entry --center --width=420 --title="Find" \
+        --text="find in /home this word or series of letters" \
+        --entry-text="$term" --button="Search:0" --button="Close:1") || break
+    term=${term//|/}
+    [ -n "${term// /}" ] || continue
+
+    {
+        find /home -iname "*$term*" 2>/dev/null | sed 's/^/name\t/'
+        grep -rIil -- "$term" /home 2>/dev/null | sed 's/^/content\t/'
+    } > "$tmp/out" &
+    job=$!
+    ( while kill -0 $job 2>/dev/null; do echo "#Searching..."; sleep 0.3; done ) |
+        yad --progress --pulsate --auto-close --no-buttons --center --width=300 \
+            --title="Find" --text="Searching /home..." 2>/dev/null
+    wait $job
+
+    if [ -s "$tmp/out" ]; then
+        n=$(wc -l < "$tmp/out")
+        # one value per line (type, path, type, path, ...) goes to the list on stdin
+        awk -F'\t' '{print $1; print $2}' "$tmp/out" |
+            yad --list --center --width=900 --height=550 --title="Find - $n matches for '$term' (double-click to open)" \
+                --column="Match" --column="Path" --dclick-action="$0 --open" \
+                --button="New search:0" --button="Close:1" || break
+    else
+        yad --info --center --title="Find" --text="Nothing found for '$term'." --button=OK:0
+    fi
+done

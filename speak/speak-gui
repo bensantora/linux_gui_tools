@@ -13,6 +13,9 @@ PATH="$here:$PATH"      # use the `speak` that sits next to this file
 text=""
 voice="cori"
 player=""
+# Larger text in the yad windows only (not in mpv/ffmpeg etc.)
+yad() { GDK_DPI_SCALE=1.3 command yad "$@"; }
+
 tmp=$(mktemp -d)
 trap '[ -n "$player" ] && kill "$player" 2>/dev/null; rm -rf "$tmp"' EXIT
 
